@@ -3,6 +3,7 @@ import random
 import aiohttp
 import aiofiles
 import asyncio
+from itertools import cycle
 
 from termcolor import cprint
 from loguru import logger
@@ -256,9 +257,6 @@ def main():
         invites = [i.strip() for i in invites]
         invites = [i for i in invites if i != '']
 
-    if len(wallets) != len(proxies):
-        logger.error('Proxies count does not match wallets count')
-        return
     if len(wallets) != len(twitters):
         logger.error('Twitter count does not match wallets count')
         return
@@ -273,11 +271,11 @@ def main():
     want_only = []
 
     def get_batches(skip: int = None):
-        _data = list(enumerate(list(zip(wallets, proxies, twitters)), start=1))
+        _data = list(enumerate(list(zip(wallets, cycle(proxies), twitters)), start=1))
         if skip is not None:
             _data = _data[skip:]
         if skip is not None and len(want_only) > 0:
-            _data = [d for d in enumerate(list(zip(wallets, proxies, twitters)), start=1) if d[0] in want_only]
+            _data = [d for d in enumerate(list(zip(wallets, cycle(proxies), twitters)), start=1) if d[0] in want_only]
         _batches: List[List[Tuple[int, Tuple[str, str, str]]]] = [[] for _ in range(THREADS_NUM)]
         for _idx, d in enumerate(_data):
             _batches[_idx % THREADS_NUM].append(d)

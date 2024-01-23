@@ -19,6 +19,9 @@ from vars import SHARE_TWEET_FORMAT, WALLET_SIGN_MESSAGE_FORMAT, BREATHE_SESSION
     INSIGHTS_CONTRACT_ADDRESS, INSIGHTS_CONTRACT_ABI, SCAN, LOG_DATA_NAME_AND_COLOR, LOG_RESULT_TOPIC
 from utils import wait_a_bit, get_w3, to_bytes, async_retry
 
+GAS_PRICE = 10024
+GAS_LIMIT = 300000
+
 
 colorama.init()
 
@@ -191,13 +194,13 @@ class Account:
         tx = await func.build_transaction({
             'from': self.account.address,
             'nonce': await self.w3.eth.get_transaction_count(self.account.address),
-            'gasPrice': 10008,
+            'gasPrice': GAS_PRICE,
         })
         try:
             _ = await self.w3.eth.estimate_gas(tx)
         except Exception as e:
             raise Exception(f'Tx simulation failed: {str(e)}')
-        tx['gas'] = 300000
+        tx['gas'] = GAS_LIMIT
 
         signed_tx = self.w3.eth.account.sign_transaction(tx, self.private_key)
         tx_hash = await self.w3.eth.send_raw_transaction(signed_tx.rawTransaction)

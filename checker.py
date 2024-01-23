@@ -1,6 +1,7 @@
 import aiohttp
 import aiofiles
 import asyncio
+from itertools import cycle
 
 from termcolor import cprint
 from loguru import logger
@@ -83,15 +84,12 @@ def main():
         twitters = file.read().splitlines()
         twitters = [t.strip() for t in twitters]
 
-    if len(wallets) != len(proxies):
-        logger.error('Proxies count does not match wallets count')
-        return
     if len(wallets) != len(twitters):
         logger.error('Twitter count does not match wallets count')
         return
 
     def get_batches(threads: int = THREADS_NUM):
-        _data = list(enumerate(list(zip(wallets, proxies, twitters)), start=1))
+        _data = list(enumerate(list(zip(wallets, cycle(proxies), twitters)), start=1))
         _batches: List[List[Tuple[int, Tuple[str, str, str]]]] = [[] for _ in range(threads)]
         for _idx, d in enumerate(_data):
             _batches[_idx % threads].append(d)
@@ -116,7 +114,7 @@ def main():
     open('results/working_wallets.txt', 'w', encoding='utf-8').close()
     open('results/working_proxies.txt', 'w', encoding='utf-8').close()
     open('results/working_twitters.txt', 'w', encoding='utf-8').close()
-    for wallet, proxy, twitter in zip(wallets, proxies, twitters):
+    for wallet, proxy, twitter in zip(wallets, cycle(proxies), twitters):
         if twitter in failed_twitter:
             failed_cnt += 1
             address = EthAccount().from_key(wallet).address
