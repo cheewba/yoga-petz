@@ -12,7 +12,7 @@ from eth_account import Account as EthAccount
 from storage import Storage
 from models import AccountInfo
 from twitter import Twitter
-from config import THREADS_NUM
+from config import THREADS_NUM, CHECKER_UPDATE_STORAGE
 from utils import async_retry
 
 
@@ -51,7 +51,8 @@ async def process_batch(bid: int, batch: List[Tuple[int, Tuple[str, str, str]]],
             await async_func(d)
         except Exception as e:
             e_msg = str(e)
-            if 'account is suspended' in e_msg or 'account has been locked' in e_msg:
+            if 'Could not authenticate you' in e_msg or 'account is suspended' in e_msg \
+                    or 'account has been locked' in e_msg:
                 failed.append(d)
             if e_msg == '':
                 e_msg = ' '
@@ -119,7 +120,8 @@ def main():
             failed_cnt += 1
             address = EthAccount().from_key(wallet).address
             logger.info(f'Removed for address {address} twitter token {twitter}, proxy {proxy}')
-            storage.remove(address)
+            if CHECKER_UPDATE_STORAGE:
+                storage.remove(address)
             continue
         with open('results/working_wallets.txt', 'a', encoding='utf-8') as file:
             file.write(f'{wallet}\n')
@@ -130,7 +132,8 @@ def main():
 
     logger.info(f'Total failed count: {failed_cnt}')
 
-    storage.save()
+    if CHECKER_UPDATE_STORAGE:
+        storage.save()
 
     print()
 
