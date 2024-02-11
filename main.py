@@ -283,7 +283,7 @@ def main():
     if len(wallets) != len(twitters):
         logger.error('Twitter count does not match wallets count')
         return
-    if len(wallets) != len(prompts):
+    if len(wallets) > len(prompts):
         logger.error('Prompts count does not match wallets count')
         return
 
