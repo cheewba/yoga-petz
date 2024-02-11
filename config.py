@@ -4,11 +4,7 @@ MAX_TRIES = 2
 
 RPC = 'https://opbnb-mainnet-rpc.bnbchain.org'
 
-<<<<<<< HEAD
 THREADS_NUM = 3
-=======
-THREADS_NUM = 2
->>>>>>> 4b947bd54d0ca2838bcde5b8c910e5ed4469f893
 
 MOBILE_PROXY = False
 DISABLE_SSL = False
@@ -29,10 +25,5 @@ DO_TASKS = True
 CLAIM_DAILY_INSIGHT = True
 CLAIM_RANK_INSIGHTS = True
 
-<<<<<<< HEAD
-MIN_INSIGHTS_TO_OPEN = 3
-=======
-MIN_INSIGHTS_TO_OPEN = 10
-
->>>>>>> 4b947bd54d0ca2838bcde5b8c910e5ed4469f893
+MIN_INSIGHTS_TO_OPEN = 5
 CHECKER_UPDATE_STORAGE = False

@@ -24,6 +24,11 @@ from config import DO_TASKS, CLAIM_DAILY_INSIGHT, CLAIM_RANK_INSIGHTS, \
 from utils import wait_a_bit, async_retry
 
 
+def random_choice(items: List[str]) -> str:
+    while True:
+        yield random.choice(items)
+
+
 class InvitesHandler:
 
     def __init__(self, invites: List[str], storage: Storage, addresses: List[str]):
@@ -297,11 +302,11 @@ def main():
     want_only = []
 
     def get_batches(skip: int = None, threads: int = THREADS_NUM):
-        _data = list(enumerate(list(zip(wallets, cycle(proxies), twitters, prompts)), start=1))
+        _data = list(enumerate(list(zip(wallets, cycle(proxies), twitters, random_choice(prompts))), start=1))
         if skip is not None:
             _data = _data[skip:]
         if skip is not None and len(want_only) > 0:
-            _data = [d for d in enumerate(list(zip(wallets, cycle(proxies), twitters, prompts)), start=1) if d[0] in want_only]
+            _data = [d for d in enumerate(list(zip(wallets, cycle(proxies), twitters, random_choice(prompts))), start=1) if d[0] in want_only]
         if RANDOM_ORDER:
             random.shuffle(_data)
         _batches: List[List[Tuple[int, Tuple[str, str, str]]]] = [[] for _ in range(threads)]
