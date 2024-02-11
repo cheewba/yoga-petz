@@ -16,7 +16,8 @@ from twitter import Twitter
 from models import AccountInfo
 from config import MIN_INSIGHTS_TO_OPEN, FAKE_TWITTER
 from vars import SHARE_TWEET_FORMAT, WALLET_SIGN_MESSAGE_FORMAT, BREATHE_SESSION_CONDITION, \
-    INSIGHTS_CONTRACT_ADDRESS, INSIGHTS_CONTRACT_ABI, SCAN, LOG_DATA_NAME_AND_COLOR, LOG_RESULT_TOPIC
+    INSIGHTS_CONTRACT_ADDRESS, INSIGHTS_CONTRACT_ABI, SCAN, LOG_DATA_NAME_AND_COLOR, LOG_RESULT_TOPIC, \
+    MINT_TAGS, MINT_CONTRACT_ADDRESS
 from utils import wait_a_bit, get_w3, to_bytes, async_retry, close_w3
 
 GAS_PRICE = 10024
@@ -161,6 +162,12 @@ class Account:
                     return False
                 case 'twitter-check-profile-banner':
                     return True
+                case 'mint-daily-well3nft':
+                    try:
+                        return await self.mint_daily_well3_nft(task_info)
+                    except Exception as e:
+                        logger.warning(f'{self.idx}) Failed to mint daily Well3NFT: {str(e)}')
+                        return False
                 case unknown_action:
                     logger.warning(f'{self.idx}) Unknown special action {unknown_action}. Trying to verify anyway')
                     return True
@@ -198,13 +205,73 @@ class Account:
         self.private_key = private_key
 
     @async_retry
+    async def mint_daily_well3_nft(self, task_info: dict) -> bool:
+        if task_info['value'] == 1:
+            logger.info(f'{self.idx}) Daily NFT already minted')
+            return True
+
+        if len(self.account.mint_prompt) == 0:
+            logger.warning(f'{self.idx}) Empty mint prompt for account. Can\'t mint')
+            return False
+        tags = random.sample(MINT_TAGS, random.randint(1, 4))
+        prompt = ','.join([self.account.mint_prompt] + tags)
+
+        length = hex(len(prompt))[2:].zfill(64)
+        prompt = prompt.encode('utf-8').hex()
+        if len(prompt) % 64 != 0:
+            prompt = prompt.ljust(64 - len(prompt) % 64, '0')
+
+        data = f'0x1f54b30a' \
+               f'0000000000000000000000000000000000000000000000000000000000000020' \
+               f'{length}{prompt}'
+
+        tx = {
+            'chainId': await self.w3.eth.chain_id,
+            'from': self.account.address,
+            'nonce': await self.w3.eth.get_transaction_count(self.account.address),
+            'to': MINT_CONTRACT_ADDRESS,
+            'data': to_bytes(data),
+            'maxPriorityFeePerGas': 10000,
+            'maxFeePerGas': 10024,
+        }
+        try:
+            _ = await self.w3.eth.estimate_gas(tx)
+        except Exception as e:
+            raise Exception(f'Mint tx simulation failed: {str(e)}')
+        tx['gas'] = 3000000
+
+        signed_tx = self.w3.eth.account.sign_transaction(tx, self.private_key)
+        tx_hash = await self.w3.eth.send_raw_transaction(signed_tx.rawTransaction)
+
+        await self.tx_verification(tx_hash, f'Mint daily Well3NFT')
+        await wait_a_bit(2)
+
+        logger.info(f'{self.idx}) Waiting for Well3NFT in API')
+
+        for _ in range(5):
+            await asyncio.sleep(20)
+            try:
+                tokens = await self.well3.tokens_of_owner(0)
+                if any(token['_txHash'] == tx_hash.hex() for token in tokens):
+                    return True
+                logger.info(f'{self.idx}) Well3NFT not found')
+            except Exception as e:
+                import traceback
+                print(traceback.format_exc())
+                logger.warning(f'{self.idx}) Failed request for Well3NFT: {str(e)}')
+
+        logger.error(f"{self.idx}) Well3NFT didn't appear in API for 100s. Try to claim anyway")
+        return True
+
+    @async_retry
     async def build_and_send_tx(self, func: AsyncContractConstructor):
         if self.private_key is None:
             raise Exception('No private key specified')
         tx = await func.build_transaction({
             'from': self.account.address,
             'nonce': await self.w3.eth.get_transaction_count(self.account.address),
-            'gasPrice': GAS_PRICE,
+            'maxPriorityFeePerGas': 10000,
+            'maxFeePerGas': 10024,
         })
         try:
             _ = await self.w3.eth.estimate_gas(tx)
@@ -276,10 +343,10 @@ class Account:
             self.account.daily_insight = 'SUPER ' + self.account.daily_insight
         return self.account.daily_insight_colored
 
-    async def claim_daily_insight(self) -> int:
+    async def claim_daily_insight(self):
         logger.info(f'{self.idx}) Daily insight status: {await self.check_daily_insight()}')
         if not self.account.daily_insight.endswith('available'):
-            return 0
+            return
 
         is_super_log = ''
         if self.profile['dailyBonusInfo']['status']['superQuestEligible']:
@@ -299,8 +366,8 @@ class Account:
             tx_hash = await self.build_and_send_tx(self.insights_contract.functions.nonceQuest(nonce, signature))
 
         await self.tx_verification(tx_hash, f'Claim {is_super_log}daily insight')
-
-        return 1
+        await wait_a_bit(2)
+        await self.refresh_profile()
 
     @async_retry
     async def check_rank_insights(self):
@@ -310,10 +377,10 @@ class Account:
         self.account.insights_to_open = cnt
         return self.account.insights_to_open
 
-    async def claim_rank_insights(self) -> int:
+    async def claim_rank_insights(self):
         logger.info(f'{self.idx}) Rank insights available to open: {await self.check_rank_insights()}')
         if self.account.insights_to_open < MIN_INSIGHTS_TO_OPEN:
-            return 0
+            return
         rank_quest = self.profile['contractInfo']['rankupQuest']
         current_rank = rank_quest['currentRank']
         signature = to_bytes(rank_quest['signature'])
@@ -321,7 +388,8 @@ class Account:
                                                rankupQuestAmount(current_rank, signature,
                                                                  self.account.insights_to_open))
         await self.tx_verification(tx_hash, 'Claim rank insight')
-        return 1
+        await wait_a_bit(2)
+        await self.refresh_profile()
 
     @async_retry
     async def check_results(self):
